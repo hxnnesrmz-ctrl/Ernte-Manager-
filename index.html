@@ -1,0 +1,448 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#174c35">
+<title>Ernte-Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f0f4f1;color:#20382c;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif}
+header{background:linear-gradient(120deg,#123e2b,#39865a);color:white;padding:25px 20px;border-radius:0 0 25px 25px}
+header h1{margin:0;font-size:26px}
+header p{margin:8px 0 0;color:#d5eddb}
+main{max-width:850px;margin:auto;padding:16px 16px 110px}
+.card{background:white;padding:19px;border-radius:19px;margin-bottom:15px;box-shadow:0 4px 16px #163e2910}
+h2{margin:0 0 15px;font-size:21px}
+h3{margin:10px 0}
+label{display:block;font-size:13px;font-weight:600;margin-top:12px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #d6e0d8;border-radius:11px;background:#f8faf8;font-size:16px;margin-top:5px;color:#20382c}
+button{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600;background:#28784b;color:white;cursor:pointer}
+button:disabled{opacity:.5}
+.primary{width:100%;margin-top:16px}
+.secondary{background:#e5eee7;color:#245b39}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{padding:17px;border-radius:17px;color:white;min-height:100px}
+.stat strong{display:block;font-size:26px;margin-top:10px}
+.green{background:#348458}
+.gold{background:#c49332}
+.blue{background:#387eae}
+.purple{background:#8262ac}
+nav{position:fixed;bottom:0;left:0;right:0;background:white;display:flex;justify-content:space-around;padding:10px 4px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -3px 18px #0001}
+nav button{background:transparent;color:#718078;font-size:11px;padding:8px}
+nav button.active{background:#e1f1e6;color:#21663d}
+nav span{display:block;font-size:23px;margin-bottom:4px}
+small,.muted{color:#738279}
+.entry{padding:13px 0;border-bottom:1px solid #e5ebe6}
+.bar{height:28px;border-radius:7px;min-width:2px;margin:6px 0}
+.notice{background:#fff4d7;color:#785d20;padding:13px;border-radius:12px;font-size:13px;margin-bottom:15px}
+#status{white-space:pre-wrap;font-size:14px;padding:10px;color:#8a4220}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+<h1>🌾 Ernte-Manager</h1>
+<p>Dein Betrieb. Deine Ernte. Deine Daten.</p>
+</header>
+<main>
+<div id="status" role="status"></div>
+
+<section id="login" class="card">
+<h2>Willkommen zurück</h2>
+<p class="muted">Melde dich mit deinem App-Benutzerkonto an.</p>
+<form id="loginForm">
+<label>E-Mail</label>
+<input id="email" type="email" autocomplete="username" required>
+<label>Passwort</label>
+<input id="password" type="password" autocomplete="current-password" required>
+<button class="primary">Anmelden</button>
+</form>
+</section>
+
+<div id="app" hidden>
+<div class="notice">Testversion – bitte zunächst nur Testdaten verwenden.</div>
+
+<section id="start" class="page">
+<div class="card">
+<h2>Betriebsübersicht</h2>
+<p id="welcome" class="muted"></p>
+<div class="grid">
+<div class="stat green">Schläge<strong id="countFields">0</strong></div>
+<div class="stat gold">Fläche<strong id="totalArea">0 ha</strong></div>
+<div class="stat blue">Ernte dieses Jahr<strong id="totalHarvest">0 t</strong></div>
+<div class="stat purple">Lieferungen<strong id="countHarvest">0</strong></div>
+</div>
+<button class="primary" onclick="showPage('ernte')">＋ Ernte erfassen</button>
+</div>
+<div class="card">
+<h2>Letzte Lieferungen</h2>
+<div id="recent"></div>
+</div>
+<button class="secondary" id="logout">Abmelden</button>
+</section>
+
+<section id="schlaege" class="page" hidden>
+<div class="card">
+<h2>🌱 Schlag anlegen</h2>
+<form id="fieldForm">
+<label>Schlagname</label>
+<input id="fieldName" required placeholder="z. B. Am Wald">
+<label>Fläche in Hektar</label>
+<input id="fieldArea" type="number" min="0.01" step="0.01" required placeholder="12,50">
+<button class="primary">Schlag speichern</button>
+</form>
+</div>
+<div class="card">
+<h2>Meine Schläge</h2>
+<input id="fieldSearch" placeholder="Schlag suchen ...">
+<div id="fieldList"></div>
+</div>
+</section>
+
+<section id="ernte" class="page" hidden>
+<div class="card">
+<h2>🚜 Neue Lieferung</h2>
+<form id="harvestForm">
+<label>Schlag suchen</label>
+<input id="harvestSearch" placeholder="Schlagname eingeben ...">
+<label>Schlag auswählen</label>
+<select id="harvestField" required></select>
+<label>Fruchtart</label>
+<select id="crop" required></select>
+<label>Datum</label>
+<input id="date" type="date" required>
+<label>Nettogewicht in kg</label>
+<input id="weight" type="number" min="1" step="any" required placeholder="25480">
+<h3>Qualitätswerte</h3>
+<div class="grid">
+<div><label>Feuchtigkeit (%)</label><input id="moisture" type="number" min="0" max="100" step="any"></div>
+<div><label>Eiweiß (%)</label><input id="protein" type="number" min="0" max="100" step="any"></div>
+<div><label>HL-Gewicht (kg/hl)</label><input id="hl" type="number" min="0" step="any"></div>
+<div><label>Ölgehalt (%)</label><input id="oil" type="number" min="0" max="100" step="any"></div>
+<div><label>Besatz (%)</label><input id="impurity" type="number" min="0" max="100" step="any"></div>
+<div><label>Fallzahl (s)</label><input id="fall" type="number" min="0" step="any"></div>
+</div>
+<label>Abnehmer</label>
+<input id="buyer" placeholder="Landhandel">
+<label>Wiegescheinnummer</label>
+<input id="ticket">
+<label>Notizen</label>
+<textarea id="notes"></textarea>
+<div class="notice" style="margin-top:15px">📷 Automatische Wiegescheinerkennung folgt in einer späteren Version.</div>
+<button class="primary">Lieferung speichern</button>
+</form>
+</div>
+<div class="card">
+<h2>Erfasste Lieferungen</h2>
+<div id="harvestList"></div>
+</div>
+</section>
+
+<section id="auswertung" class="page" hidden>
+<div class="card">
+<h2>📊 Jahresvergleich</h2>
+<label>Schlag</label>
+<select id="statsField"></select>
+<label>Fruchtart</label>
+<select id="statsCrop"></select>
+<label>Auswertung</label>
+<select id="metric">
+<option value="gewicht_kg">Erntemenge (t)</option>
+<option value="yield">Ertrag (t/ha)</option>
+<option value="protein">Eiweiß (%)</option>
+<option value="feuchtigkeit">Feuchtigkeit (%)</option>
+<option value="hl_gewicht">HL-Gewicht (kg/hl)</option>
+<option value="oelgehalt">Ölgehalt (%)</option>
+<option value="besatz">Besatz (%)</option>
+<option value="fallzahl">Fallzahl (s)</option>
+</select>
+</div>
+<div class="card">
+<h2>Vergleich der Erntejahre</h2>
+<div id="chart"></div>
+<p id="average"></p>
+<small>Qualitätswerte werden nach Liefergewicht gewichtet. Fehlende Werte werden nicht als Null gerechnet. Ertrag je Hektar basiert auf der aktuell gespeicherten Schlaggröße.</small>
+</div>
+</section>
+</div>
+</main>
+
+<nav id="navigation" hidden>
+<button data-page="start" class="active" onclick="showPage('start')"><span>🏠</span>Start</button>
+<button data-page="schlaege" onclick="showPage('schlaege')"><span>🌱</span>Schläge</button>
+<button data-page="ernte" onclick="showPage('ernte')"><span>🚜</span>Ernte</button>
+<button data-page="auswertung" onclick="showPage('auswertung')"><span>📊</span>Auswertung</button>
+</nav>
+
+<script>
+const $ = id => document.getElementById(id);
+const db = supabase.createClient(
+'https://sevtzfmuskbfgzbmdprn.supabase.co',
+'sb_publishable_GY5HJRr3jLJRMn5OmQ3Wug_0q4KzMih'
+);
+const crops=['Winterweizen','Wintergerste','Raps','Mais','Roggen','Triticale','Sonstige'];
+let user=null, fields=[], harvests=[];
+let generation=0;
+
+const fmt=n=>Number(n).toLocaleString('de-DE',{maximumFractionDigits:2});
+const num=id=>$(id).value===''?null:Number($(id).value);
+const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+const year=()=>new Date().getFullYear();
+const message=t=>$('status').textContent=t;
+const fieldName=id=>fields.find(f=>f.id===id)?.name||'Unbekannter Schlag';
+
+function option(select,value,label){
+const o=document.createElement('option');
+o.value=value;
+o.textContent=label;
+select.append(o);
+}
+crops.forEach(c=>{
+option($('crop'),c,c);
+option($('statsCrop'),c,c);
+});
+$('date').value=today();
+
+function showPage(id){
+document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==id);
+document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===id));
+if(id==='auswertung') renderChart();
+window.scrollTo(0,0);
+}
+
+async function readAll(table){
+let rows=[];
+for(let offset=0;;offset+=500){
+const {data,error}=await db.from(table).select('*').order('id').range(offset,offset+499);
+if(error) throw error;
+rows.push(...data);
+if(data.length<500) return rows;
+}
+}
+
+async function load(){
+const g=generation;
+const result=await Promise.all([readAll('schlaege'),readAll('ernten')]);
+if(g!==generation||!user)return;
+fields=result[0].sort((a,b)=>a.name.localeCompare(b.name));
+harvests=result[1].sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+render();
+}
+
+async function runForm(form,action){
+const button=form.querySelector('button');
+button.disabled=true;
+message('');
+try{await action();}
+catch(e){message('Fehler: '+e.message);}
+finally{button.disabled=false;}
+}
+
+$('loginForm').onsubmit=e=>{
+e.preventDefault();
+runForm(e.currentTarget,async()=>{
+const {error}=await db.auth.signInWithPassword({
+email:$('email').value.trim(),
+password:$('password').value
+});
+if(error)throw error;
+$('password').value='';
+});
+};
+
+async function sessionChanged(session){
+const g=++generation;
+user=session?.user||null;
+fields=[];harvests=[];
+render();
+$('login').hidden=!!user;
+$('app').hidden=!user;
+$('navigation').hidden=!user;
+if(user){
+$('welcome').textContent=user.email;
+try{await load();}
+catch(e){if(g===generation)message('Datenbank: '+e.message);}
+}
+}
+
+db.auth.onAuthStateChange((event,session)=>{
+if(event==='TOKEN_REFRESHED')return;
+setTimeout(()=>sessionChanged(session),0);
+});
+
+$('logout').onclick=async()=>{
+const {error}=await db.auth.signOut();
+if(error)message(error.message);
+else message('');
+};
+
+$('fieldForm').onsubmit=e=>{
+e.preventDefault();
+const form=e.currentTarget;
+runForm(form,async()=>{
+if(!user)throw new Error('Bitte anmelden.');
+const {error}=await db.from('schlaege').insert({
+benutzer_id:user.id,
+name:$('fieldName').value.trim(),
+flaeche_ha:num('fieldArea')
+});
+if(error)throw error;
+form.reset();
+message('Schlag gespeichert.');
+await load();
+});
+};
+
+$('harvestForm').onsubmit=e=>{
+e.preventDefault();
+const form=e.currentTarget;
+runForm(form,async()=>{
+if(!user)throw new Error('Bitte anmelden.');
+const {error}=await db.from('ernten').insert({
+benutzer_id:user.id,
+schlag_id:$('harvestField').value,
+datum:$('date').value,
+kultur:$('crop').value,
+gewicht_kg:num('weight'),
+feuchtigkeit:num('moisture'),
+protein:num('protein'),
+hl_gewicht:num('hl'),
+oelgehalt:num('oil'),
+besatz:num('impurity'),
+fallzahl:num('fall'),
+abnehmer:$('buyer').value.trim(),
+wiegeschein_nummer:$('ticket').value.trim(),
+notizen:$('notes').value
+});
+if(error)throw error;
+const selected=$('harvestField').value;
+const crop=$('crop').value;
+form.reset();
+$('date').value=today();
+$('crop').value=crop;
+fillFields();
+$('harvestField').value=selected;
+message('Lieferung gespeichert.');
+await load();
+});
+};
+
+function entry(parent,title,detail){
+const box=document.createElement('div');
+box.className='entry';
+const strong=document.createElement('strong');
+strong.textContent=title;
+const info=document.createElement('div');
+info.className='muted';
+info.textContent=detail;
+box.append(strong,info);
+parent.append(box);
+}
+
+function fillFields(){
+const select=$('harvestField');
+const previous=select.value;
+const q=$('harvestSearch').value.toLowerCase();
+select.replaceChildren();
+option(select,'','Schlag auswählen');
+fields.filter(f=>f.name.toLowerCase().includes(q)).forEach(f=>option(select,f.id,f.name+' · '+fmt(f.flaeche_ha)+' ha'));
+if([...select.options].some(o=>o.value===previous))select.value=previous;
+}
+
+function renderFields(){
+const box=$('fieldList');
+box.replaceChildren();
+const q=$('fieldSearch').value.toLowerCase();
+fields.filter(f=>f.name.toLowerCase().includes(q)).forEach(f=>entry(box,f.name,fmt(f.flaeche_ha)+' ha'));
+if(!box.children.length)box.textContent='Keine Schläge gefunden.';
+}
+
+function renderHarvests(box,rows){
+box.replaceChildren();
+rows.forEach(h=>entry(box,fieldName(h.schlag_id)+' · '+h.kultur,
+h.datum+' | '+fmt(Number(h.gewicht_kg)/1000)+' t'+(h.protein!=null?' | Eiweiß '+fmt(h.protein)+' %':'')));
+if(!rows.length)box.textContent='Noch keine Lieferungen.';
+}
+
+function render(){
+$('countFields').textContent=fields.length;
+$('totalArea').textContent=fmt(fields.reduce((s,f)=>s+Number(f.flaeche_ha),0))+' ha';
+const current=harvests.filter(h=>String(h.datum).slice(0,4)===String(year()));
+$('totalHarvest').textContent=fmt(current.reduce((s,h)=>s+Number(h.gewicht_kg),0)/1000)+' t';
+$('countHarvest').textContent=current.length;
+renderFields();
+fillFields();
+renderHarvests($('recent'),harvests.slice(0,5));
+renderHarvests($('harvestList'),harvests);
+const old=$('statsField').value;
+$('statsField').replaceChildren();
+option($('statsField'),'','Alle Schläge');
+fields.forEach(f=>option($('statsField'),f.id,f.name));
+$('statsField').value=fields.some(f=>f.id===old)?old:'';
+renderChart();
+}
+
+$('fieldSearch').oninput=renderFields;
+$('harvestSearch').oninput=fillFields;
+['statsField','statsCrop','metric'].forEach(id=>$(id).onchange=renderChart);
+
+function renderChart(){
+const box=$('chart');
+box.replaceChildren();
+$('average').textContent='';
+const metric=$('metric').value;
+const field=$('statsField').value;
+const crop=$('statsCrop').value;
+if(metric==='yield'&&!field){
+box.textContent='Bitte einen einzelnen Schlag auswählen.';
+return;
+}
+const rows=harvests.filter(h=>(!field||h.schlag_id===field)&&h.kultur===crop);
+const groups={};
+rows.forEach(h=>{
+const y=String(h.datum).slice(0,4);
+(groups[y]??=[]).push(h);
+});
+const values=[];
+Object.keys(groups).sort().forEach(y=>{
+const g=groups[y];
+let value;
+if(metric==='gewicht_kg'||metric==='yield'){
+value=g.reduce((s,h)=>s+Number(h.gewicht_kg),0)/1000;
+if(metric==='yield'){
+const area=Number(fields.find(f=>f.id===field)?.flaeche_ha);
+if(!(area>0))return;
+value/=area;
+}
+}else{
+const valid=g.filter(h=>h[metric]!=null&&Number(h.gewicht_kg)>0);
+const weight=valid.reduce((s,h)=>s+Number(h.gewicht_kg),0);
+if(!weight)return;
+value=valid.reduce((s,h)=>s+Number(h[metric])*Number(h.gewicht_kg),0)/weight;
+}
+if(Number.isFinite(value))values.push({y,value});
+});
+if(!values.length){
+box.textContent='Noch keine passenden Erntedaten vorhanden.';
+return;
+}
+const max=Math.max(1,...values.map(v=>v.value));
+const colors=['#4386c3','#d2a13d','#8965b4','#dc8351','#519da3'];
+values.forEach((v,i)=>{
+const label=document.createElement('div');
+label.textContent=v.y+' — '+fmt(v.value);
+const bar=document.createElement('div');
+bar.className='bar';
+bar.style.width=(100*v.value/max)+'%';
+bar.style.background=v.y===String(year())?'#348458':colors[i%colors.length];
+box.append(label,bar);
+});
+$('average').textContent='Ø der dargestellten Jahreswerte: '+fmt(values.reduce((s,v)=>s+v.value,0)/values.length);
+}
+</script>
+</body>
+</html>
