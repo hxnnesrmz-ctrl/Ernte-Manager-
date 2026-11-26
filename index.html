@@ -568,6 +568,90 @@ ocrButton.onclick = async () => {
   }
 };
 $('ticketPhoto').removeAttribute('capture');
+const originalOCR = ocrButton.onclick;
+
+ocrStatus.style.overflowWrap = 'anywhere';
+
+ocrButton.onclick = async () => {
+  const photo = $('ticketPhoto').files[0];
+  if (!photo) return originalOCR();
+
+  await originalOCR();
+
+  if ($('ticketPhoto').files[0] !== photo) {
+    ocrStatus.textContent = '';
+    return;
+  }
+
+  const t = ocrStatus.textContent;
+  if (t.startsWith('Fehler:')) return;
+
+  const found = [];
+
+  function fill(id, value, label) {
+    if (value && $(id)) {
+      $(id).value = value;
+      if ($(id).value !== '') {
+        found.push(label + ': ' + value);
+      }
+    }
+  }
+
+  const netto = t.match(
+    /N\s*E\s*T\s*T\s*O\s*[:|]?\s*(\d{1,3}[.\s]\d{3}|\d{4,6})\b/i
+  );
+
+  if (netto) {
+    fill('weight', netto[1].replace(/[.\s]/g, ''), 'Gewicht');
+  }
+
+  const datum = t.match(
+    /\b(\d{2})\.(\d{2})\.(20\d{2})\b/
+  );
+
+  if (datum) {
+    fill('date', datum[3] + '-' + datum[2] + '-' + datum[1], 'Datum');
+  }
+
+  const kultur = t.match(
+    /\b(Winterweizen|Wintergerste|Roggen|Raps|Mais|Triticale)\b/i
+  );
+
+  if (kultur) {
+    const name = crops.find(c =>
+      c.toLowerCase() === kultur[1].toLowerCase()
+    );
+    fill('crop', name, 'Getreideart');
+  }
+
+  if (/AGRAVIS\s+Ost/i.test(t)) {
+    fill('buyer', 'AGRAVIS Ost', 'Abnehmer');
+  }
+
+  const nummer = t.match(
+    /LIEFERSCHEIN\s*\/\s*PARTIE[-–\s]*NR[.:\s]*(\d{6,12})\b/i
+  );
+
+  if (nummer) {
+    fill('ticket', nummer[1], 'Lieferscheinnummer');
+  }
+
+  const feu = t.match(
+    /\b(?:FEU|Feuchtigkeit)\b[ \t|:\r\n–_*=-]*(\d{1,2}[,.]\d{1,2})\b/i
+  );
+
+  if (feu) {
+    const wert = Number(feu[1].replace(',', '.'));
+    if (wert > 0 && wert <= 100) {
+      fill('moisture', wert, 'Feuchtigkeit');
+    }
+  }
+
+  ocrStatus.textContent = found.length
+    ? 'Erkannte Werte:\n\n' + found.join('\n') +
+      '\n\nBitte alle Eingabefelder kontrollieren.'
+    : 'Keine eindeutigen Werte erkannt. Bitte manuell eingeben.';
+};
 
 </script>
 </body>
