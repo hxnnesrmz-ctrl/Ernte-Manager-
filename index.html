@@ -442,7 +442,27 @@ bar.style.background=v.y===String(year())?'#348458':colors[i%colors.length];
 box.append(label,bar);
 });
 $('average').textContent='Ø der dargestellten Jahreswerte: '+fmt(values.reduce((s,v)=>s+v.value,0)/values.length);
-}
+} 
+  const photoBox = document.querySelector('#harvestForm .notice');
+
+photoBox.innerHTML = `
+<label>📷 Wiegeschein fotografieren</label>
+<input id="ticketPhoto" type="file"
+accept="image/*" capture="environment">
+<img id="photoPreview" hidden
+style="width:100%;border-radius:12px;margin-top:10px">
+`;
+
+$('ticketPhoto').onchange = () => {
+const file = $('ticketPhoto').files[0];
+if (!file) return;
+const reader = new FileReader();
+reader.onload = () => {
+$('photoPreview').src = reader.result;
+$('photoPreview').hidden = false;
+};
+reader.readAsDataURL(file);
+};
 </script>
 </body>
 </html>
