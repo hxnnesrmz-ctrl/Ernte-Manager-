@@ -463,6 +463,67 @@ $('photoPreview').hidden = false;
 };
 reader.readAsDataURL(file);
 };
+  $('harvestForm').onsubmit = e => {
+e.preventDefault();
+const form = e.currentTarget;
+
+runForm(form, async () => {
+if (!user) throw new Error('Bitte anmelden.');
+
+let photoPath = null;
+const file = $('ticketPhoto').files[0];
+
+if (file) {
+const ext = file.name.split('.').pop().toLowerCase();
+photoPath = user.id + '/' + crypto.randomUUID() + '.' + ext;
+
+const {error: uploadError} = await db.storage
+.from('Wiegeschein')
+.upload(photoPath, file);
+
+if (uploadError) throw uploadError;
+}
+
+const {error} = await db.from('ernten').insert({
+benutzer_id: user.id,
+schlag_id: $('harvestField').value,
+datum: $('date').value,
+kultur: $('crop').value,
+gewicht_kg: num('weight'),
+feuchtigkeit: num('moisture'),
+protein: num('protein'),
+hl_gewicht: num('hl'),
+oelgehalt: num('oil'),
+besatz: num('impurity'),
+fallzahl: num('fall'),
+abnehmer: $('buyer').value.trim(),
+wiegeschein_nummer: $('ticket').value.trim(),
+notizen: $('notes').value,
+wiegeschein_foto: photoPath
+});
+
+if (error) {
+if (photoPath) {
+await db.storage.from('Wiegeschein').remove([photoPath]);
+}
+throw error;
+}
+
+const selected = $('harvestField').value;
+const crop = $('crop').value;
+
+form.reset();
+$('photoPreview').hidden = true;
+$('photoPreview').removeAttribute('src');
+$('date').value = today();
+$('crop').value = crop;
+fillFields();
+$('harvestField').value = selected;
+
+message('Lieferung erfolgreich gespeichert.');
+await load();
+});
+};
 </script>
 </body>
 </html>
