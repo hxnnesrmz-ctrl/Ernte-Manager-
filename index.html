@@ -524,6 +524,50 @@ message('Lieferung erfolgreich gespeichert.');
 await load();
 });
 };
+  const ocrButton = document.createElement('button');
+ocrButton.type = 'button';
+ocrButton.textContent = '🔍 Wiegeschein automatisch auslesen';
+ocrButton.style.cssText = 'width:100%;margin-top:12px;background:#174c35;color:white;';
+photoBox.appendChild(ocrButton);
+
+const ocrStatus = document.createElement('pre');
+ocrStatus.style.whiteSpace = 'pre-wrap';
+photoBox.appendChild(ocrStatus);
+
+ocrButton.onclick = async () => {
+  const file = $('ticketPhoto').files[0];
+
+  if (!file) {
+    alert('Bitte zuerst einen Wiegeschein fotografieren.');
+    return;
+  }
+
+  ocrButton.disabled = true;
+  ocrStatus.textContent = 'Texterkennung wird geladen...';
+
+  try {
+    if (!window.Tesseract) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    ocrStatus.textContent = 'Wiegeschein wird gelesen...';
+
+    const result = await Tesseract.recognize(file, 'deu');
+    ocrStatus.textContent = result.data.text;
+
+  } catch (error) {
+    ocrStatus.textContent = 'Fehler: ' + error.message;
+  } finally {
+    ocrButton.disabled = false;
+  }
+};
+
 </script>
 </body>
 </html>
