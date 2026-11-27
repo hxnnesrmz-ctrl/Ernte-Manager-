@@ -646,14 +646,13 @@ ocrButton.onclick = async () => {
       fill('moisture', wert, 'Feuchtigkeit');
     }
   }
-
+found.push('OCR-Test:\n' + t);
   ocrStatus.textContent = found.length
     ? 'Erkannte Werte:\n\n' + found.join('\n') +
       '\n\nBitte alle Eingabefelder kontrollieren.'
-    : 'Keine eindeutigen Werte erkannt. Bitte manuell eingeben.';
-};
-found.push('OCR-Test:\n' + t);
+    : 'Keine eindeutigen Werte erkannt. Bitte manuell 
 
+};
 </script>
 </body>
 </html>
